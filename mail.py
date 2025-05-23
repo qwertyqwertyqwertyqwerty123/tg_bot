@@ -46,7 +46,8 @@ async def start(message: types.Message):
     await message.reply("Привет! Напиши /new чтобы добавить запись.")
 
 @dp.message_handler(commands=['new'])
-async def new_entry(message: types.Message):
+async def new_entry(message: types.Message, state: FSMContext):
+    await state.finish()  # дополнительный сброс перед началом
     await message.answer("Введите дату (например, 24.05.25):")
     await Booking.date.set()
 
