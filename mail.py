@@ -21,7 +21,7 @@ dp = Dispatcher(bot, storage=storage)
 CSV_FILE = "data.csv"
 MSG_FILE = "messages.json"
 
-# Загрузка message_id для дат
+# Загрузка message_id сообщений для дат
 if os.path.exists(MSG_FILE):
     with open(MSG_FILE, "r") as f:
         messages = json.load(f)
@@ -42,100 +42,70 @@ class Booking(StatesGroup):
     price = State()
     comment = State()
 
-# --- Сначала обработчик команд reset и cancel, чтобы он срабатывал раньше ---
-@dp.message_handler(commands=['reset', 'cancel'], state='*')
-async def cancel_handler(message: types.Message, state: FSMContext):
+# Общая функция для сброса состояния и уведомления
+async def reset_dialog(message: types.Message, state: FSMContext):
     await state.finish()
     await message.answer("Диалог сброшен. Напиши /new, чтобы начать запись заново.")
 
-# Теперь остальные хендлеры
-
 @dp.message_handler(commands=['start'])
-async def start(message: types.Message):
+async def cmd_start(message: types.Message, state: FSMContext):
+    await state.finish()
     await message.reply("Привет! Напиши /new чтобы добавить запись.")
 
 @dp.message_handler(commands=['new'])
-async def new_entry(message: types.Message):
+async def cmd_new(message: types.Message, state: FSMContext):
+    await state.finish()
     await message.answer("Введите дату (например, 24.05.25):")
     await Booking.date.set()
 
+@dp.message_handler(commands=['cancel', 'reset'], state='*')
+async def cmd_cancel_reset(message: types.Message, state: FSMContext):
+    await reset_dialog(message, state)
+
 @dp.message_handler(state=Booking.date)
-async def get_date(message: types.Message, state: FSMContext):
-    if message.text.lower() in ['/reset', '/cancel']:
-        await state.finish()
-        await message.answer("Диалог сброшен. Напиши /new, чтобы начать запись заново.")
-        return
+async def process_date(message: types.Message, state: FSMContext):
     await state.update_data(date=message.text)
     await message.answer("Введите время (например, 18:00):")
     await Booking.next()
 
 @dp.message_handler(state=Booking.time)
-async def get_time(message: types.Message, state: FSMContext):
-    if message.text.lower() in ['/reset', '/cancel']:
-        await state.finish()
-        await message.answer("Диалог сброшен. Напиши /new, чтобы начать запись заново.")
-        return
+async def process_time(message: types.Message, state: FSMContext):
     await state.update_data(time=message.text)
     await message.answer("Введите источник (например, мк или qh):")
     await Booking.next()
 
 @dp.message_handler(state=Booking.source)
-async def get_source(message: types.Message, state: FSMContext):
-    if message.text.lower() in ['/reset', '/cancel']:
-        await state.finish()
-        await message.answer("Диалог сброшен. Напиши /new, чтобы начать запись заново.")
-        return
+async def process_source(message: types.Message, state: FSMContext):
     await state.update_data(source=message.text)
     await message.answer("Введите контакт (@ник или номер):")
     await Booking.next()
 
 @dp.message_handler(state=Booking.contact)
-async def get_contact(message: types.Message, state: FSMContext):
-    if message.text.lower() in ['/reset', '/cancel']:
-        await state.finish()
-        await message.answer("Диалог сброшен. Напиши /new, чтобы начать запись заново.")
-        return
+async def process_contact(message: types.Message, state: FSMContext):
     await state.update_data(contact=message.text)
     await message.answer("Введите количество человек:")
     await Booking.next()
 
 @dp.message_handler(state=Booking.count)
-async def get_count(message: types.Message, state: FSMContext):
-    if message.text.lower() in ['/reset', '/cancel']:
-        await state.finish()
-        await message.answer("Диалог сброшен. Напиши /new, чтобы начать запись заново.")
-        return
+async def process_count(message: types.Message, state: FSMContext):
     await state.update_data(count=message.text)
     await message.answer("Введите минимальный возраст:")
     await Booking.next()
 
 @dp.message_handler(state=Booking.age_min)
-async def get_age_min(message: types.Message, state: FSMContext):
-    if message.text.lower() in ['/reset', '/cancel']:
-        await state.finish()
-        await message.answer("Диалог сброшен. Напиши /new, чтобы начать запись заново.")
-        return
+async def process_age_min(message: types.Message, state: FSMContext):
     await state.update_data(age_min=message.text)
     await message.answer("Введите цену (в рублях):")
     await Booking.next()
 
 @dp.message_handler(state=Booking.price)
-async def get_price(message: types.Message, state: FSMContext):
-    if message.text.lower() in ['/reset', '/cancel']:
-        await state.finish()
-        await message.answer("Диалог сброшен. Напиши /new, чтобы начать запись заново.")
-        return
+async def process_price(message: types.Message, state: FSMContext):
     await state.update_data(price=message.text)
     await message.answer("Дополнительная информация (если есть):")
     await Booking.next()
 
 @dp.message_handler(state=Booking.comment)
-async def get_comment(message: types.Message, state: FSMContext):
-    if message.text.lower() in ['/reset', '/cancel']:
-        await state.finish()
-        await message.answer("Диалог сброшен. Напиши /new, чтобы начать запись заново.")
-        return
-
+async def process_comment(message: types.Message, state: FSMContext):
     await state.update_data(comment=message.text)
     data = await state.get_data()
 
@@ -147,22 +117,22 @@ async def get_comment(message: types.Message, state: FSMContext):
             data['count'], data['age_min'], data['price'], data['comment']
         ])
 
-    # Обновляем или создаем сообщение в канале
+    # Обновляем или создаём сообщение в канале
     await update_channel_message(data['date'])
 
     await message.answer("Запись добавлена!")
     await state.finish()
 
-async def update_channel_message(date):
+async def update_channel_message(date: str):
     entries = load_entries_for_date(date)
     text = render_day_message(date, entries)
 
     if date in messages:
-        msg_id = messages[date]
         try:
+            msg_id = messages[date]
             await bot.edit_message_text(text, chat_id=CHANNEL_ID, message_id=msg_id, parse_mode="HTML")
         except Exception as e:
-            # Если не удалось редактировать, отправим новое сообщение и обновим id
+            # Если не получилось отредактировать (например, сообщение удалено), отправим новое
             sent = await bot.send_message(CHANNEL_ID, text, parse_mode="HTML")
             messages[date] = sent.message_id
             save_messages()
@@ -171,14 +141,14 @@ async def update_channel_message(date):
         messages[date] = sent.message_id
         save_messages()
 
-def load_entries_for_date(date):
+def load_entries_for_date(date: str):
     entries = []
     if not os.path.exists(CSV_FILE):
         return entries
-    with open(CSV_FILE, 'r') as f:
+    with open(CSV_FILE, 'r', newline='') as f:
         reader = csv.reader(f)
         for row in reader:
-            if row[0] == date:
+            if len(row) >= 8 and row[0] == date:
                 entries.append({
                     'date': row[0], 'time': row[1], 'source': row[2],
                     'contact': row[3], 'count': row[4], 'age_min': row[5],
@@ -186,12 +156,14 @@ def load_entries_for_date(date):
                 })
     return entries
 
-def render_day_message(date, entries):
-    text = f"\u2728 <b>Записи на {date}</b>\n\n"
+def render_day_message(date: str, entries: list):
+    text = f"✨ <b>Записи на {date}</b>\n\n"
     for entry in entries:
-        text += (f"\u23F0 <b>{entry['time']}</b> — {entry['count']} чел, от {entry['age_min']} лет, {entry['price']}₽\n"
-                 f"\u260E {entry['contact']} ({entry['source']})\n"
-                 f"\u2709 {entry['comment'] or '—'}\n\n")
+        text += (
+            f"⏰ <b>{entry['time']}</b> — {entry['count']} чел, от {entry['age_min']} лет, {entry['price']}₽\n"
+            f"☎ {entry['contact']} ({entry['source']})\n"
+            f"✉ {entry['comment'] or '—'}\n\n"
+        )
     return text
 
 @dp.message_handler(commands=['csv'])
@@ -203,16 +175,13 @@ async def send_csv(message: types.Message):
 
 @dp.message_handler(commands=['today'])
 async def send_today_entries(message: types.Message):
-    try:
-        today = datetime.today().strftime("%d.%m.%y")
-        entries = load_entries_for_date(today)
-        if entries:
-            text = render_day_message(today, entries)
-        else:
-            text = f"❌ На сегодня ({today}) записей нет."
-        await message.answer(text, parse_mode="HTML")
-    except FileNotFoundError:
-        await message.answer("Файл с записями не найден.")
+    today = datetime.today().strftime("%d.%m.%y")
+    entries = load_entries_for_date(today)
+    if entries:
+        text = render_day_message(today, entries)
+    else:
+        text = f"❌ На сегодня ({today}) записей нет."
+    await message.answer(text, parse_mode="HTML")
 
 if __name__ == '__main__':
     print("Бот запущен")
