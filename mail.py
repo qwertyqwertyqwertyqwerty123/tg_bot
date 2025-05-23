@@ -42,6 +42,14 @@ class Booking(StatesGroup):
     price = State()
     comment = State()
 
+# --- Сначала обработчик команд reset и cancel, чтобы он срабатывал раньше ---
+@dp.message_handler(commands=['reset', 'cancel'], state='*')
+async def cancel_handler(message: types.Message, state: FSMContext):
+    await state.finish()
+    await message.answer("Диалог сброшен. Напиши /new, чтобы начать запись заново.")
+
+# Теперь остальные хендлеры
+
 @dp.message_handler(commands=['start'])
 async def start(message: types.Message):
     await message.reply("Привет! Напиши /new чтобы добавить запись.")
@@ -53,48 +61,81 @@ async def new_entry(message: types.Message):
 
 @dp.message_handler(state=Booking.date)
 async def get_date(message: types.Message, state: FSMContext):
+    if message.text.lower() in ['/reset', '/cancel']:
+        await state.finish()
+        await message.answer("Диалог сброшен. Напиши /new, чтобы начать запись заново.")
+        return
     await state.update_data(date=message.text)
     await message.answer("Введите время (например, 18:00):")
     await Booking.next()
 
 @dp.message_handler(state=Booking.time)
 async def get_time(message: types.Message, state: FSMContext):
+    if message.text.lower() in ['/reset', '/cancel']:
+        await state.finish()
+        await message.answer("Диалог сброшен. Напиши /new, чтобы начать запись заново.")
+        return
     await state.update_data(time=message.text)
     await message.answer("Введите источник (например, мк или qh):")
     await Booking.next()
 
 @dp.message_handler(state=Booking.source)
 async def get_source(message: types.Message, state: FSMContext):
+    if message.text.lower() in ['/reset', '/cancel']:
+        await state.finish()
+        await message.answer("Диалог сброшен. Напиши /new, чтобы начать запись заново.")
+        return
     await state.update_data(source=message.text)
     await message.answer("Введите контакт (@ник или номер):")
     await Booking.next()
 
 @dp.message_handler(state=Booking.contact)
 async def get_contact(message: types.Message, state: FSMContext):
+    if message.text.lower() in ['/reset', '/cancel']:
+        await state.finish()
+        await message.answer("Диалог сброшен. Напиши /new, чтобы начать запись заново.")
+        return
     await state.update_data(contact=message.text)
     await message.answer("Введите количество человек:")
     await Booking.next()
 
 @dp.message_handler(state=Booking.count)
 async def get_count(message: types.Message, state: FSMContext):
+    if message.text.lower() in ['/reset', '/cancel']:
+        await state.finish()
+        await message.answer("Диалог сброшен. Напиши /new, чтобы начать запись заново.")
+        return
     await state.update_data(count=message.text)
     await message.answer("Введите минимальный возраст:")
     await Booking.next()
 
 @dp.message_handler(state=Booking.age_min)
 async def get_age_min(message: types.Message, state: FSMContext):
+    if message.text.lower() in ['/reset', '/cancel']:
+        await state.finish()
+        await message.answer("Диалог сброшен. Напиши /new, чтобы начать запись заново.")
+        return
     await state.update_data(age_min=message.text)
     await message.answer("Введите цену (в рублях):")
     await Booking.next()
 
 @dp.message_handler(state=Booking.price)
 async def get_price(message: types.Message, state: FSMContext):
+    if message.text.lower() in ['/reset', '/cancel']:
+        await state.finish()
+        await message.answer("Диалог сброшен. Напиши /new, чтобы начать запись заново.")
+        return
     await state.update_data(price=message.text)
     await message.answer("Дополнительная информация (если есть):")
     await Booking.next()
 
 @dp.message_handler(state=Booking.comment)
 async def get_comment(message: types.Message, state: FSMContext):
+    if message.text.lower() in ['/reset', '/cancel']:
+        await state.finish()
+        await message.answer("Диалог сброшен. Напиши /new, чтобы начать запись заново.")
+        return
+
     await state.update_data(comment=message.text)
     data = await state.get_data()
 
@@ -118,7 +159,13 @@ async def update_channel_message(date):
 
     if date in messages:
         msg_id = messages[date]
-        await bot.edit_message_text(text, chat_id=CHANNEL_ID, message_id=msg_id, parse_mode="HTML")
+        try:
+            await bot.edit_message_text(text, chat_id=CHANNEL_ID, message_id=msg_id, parse_mode="HTML")
+        except Exception as e:
+            # Если не удалось редактировать, отправим новое сообщение и обновим id
+            sent = await bot.send_message(CHANNEL_ID, text, parse_mode="HTML")
+            messages[date] = sent.message_id
+            save_messages()
     else:
         sent = await bot.send_message(CHANNEL_ID, text, parse_mode="HTML")
         messages[date] = sent.message_id
@@ -153,11 +200,6 @@ async def send_csv(message: types.Message):
         await bot.send_document(message.chat.id, types.InputFile(CSV_FILE))
     except FileNotFoundError:
         await message.answer("Файл пока не создан.")
-
-@dp.message_handler(commands=['reset', 'cancel'], state='*')
-async def cancel_handler(message: types.Message, state: FSMContext):
-    await state.finish()
-    await message.answer("Диалог сброшен. Напиши /new, чтобы начать запись заново.")
 
 @dp.message_handler(commands=['today'])
 async def send_today_entries(message: types.Message):
