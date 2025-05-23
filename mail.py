@@ -168,7 +168,9 @@ async def send_csv(message: types.Message):
 @dp.message_handler(commands=['reset', 'cancel'], state='*')
 async def cancel_handler(message: types.Message, state: FSMContext):
     await state.finish()
+    await state.reset_state(with_data=True)
     await message.answer("Диалог сброшен. Напиши /new, чтобы начать запись заново.")
+
 
 @dp.message_handler(commands=['today'])
 async def send_today_entries(message: types.Message):
