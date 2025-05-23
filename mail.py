@@ -159,12 +159,6 @@ async def cancel_handler(message: types.Message, state: FSMContext):
     await state.finish()
     await message.answer("Диалог сброшен. Напиши /new, чтобы начать запись заново.")
 
-@dp.message_handler(commands=['new'], state='*')
-async def new_entry(message: types.Message, state: FSMContext):
-    await state.finish()
-    await message.answer("Введите дату (например, 24.05.25):")
-    await Booking.date.set()
-
 @dp.message_handler(commands=['today'])
 async def send_today_entries(message: types.Message):
     try:
